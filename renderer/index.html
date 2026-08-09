@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>GYG2Medal</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <div class="mark"></div>
+    <span class="name">GYG2Medal</span><span class="ver" id="ver"></span>
+    <span class="spacer"></span>
+    <div class="crumbs">
+      <div class="crumb" id="c1"></div><div class="crumb" id="c2"></div>
+      <div class="crumb" id="c3"></div><div class="crumb" id="c4"></div>
+    </div>
+  </div>
+
+  <!-- 1. sign in -->
+  <section class="screen active" id="s-signin">
+    <h1>Move your clips to Medal</h1>
+    <p class="sub">Gif Your Game shut the door without building an exit. This opens it. Every clip you own, downloaded and imported into Medal, dated the day you actually clipped it.</p>
+    <button class="btn primary big" id="btn-login">Sign in with Gif Your Game</button>
+    <p class="hint" id="login-hint">Opens the real gifyourgame.com sign-in page. Email, Discord, Google and Steam all work. This app never sees your password.</p>
+    <p class="err" id="login-err"></p>
+    <div class="card hidden" id="dev-bar">
+      <b style="font-size:13px">Dev mode</b>
+      <span class="note">Skip sign-in, scan and download. Loads a saved manifest and runs the Medal steps against a folder you already have.</span>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="dev-run">Load manifest + pick folder</button>
+        <button class="btn ghost" id="dev-pick">Choose a different manifest…</button>
+      </div>
+      <span class="note" id="dev-note"></span>
+    </div>
+    <p class="foot">Your clips on GYG are only ever read. Nothing there is changed or deleted.</p>
+  </section>
+
+  <!-- 2. scanning -->
+  <section class="screen" id="s-scan">
+    <h1>Reading your library</h1>
+    <p class="sub" id="scan-who"></p>
+    <div class="bar"><div class="fill" id="scan-fill"></div></div>
+    <p class="stat" id="scan-stage">Connecting…</p>
+    <p class="hint">GYG keeps each clip's video on a separate record, so this makes one lookup per clip. Roughly 200 a second.</p>
+  </section>
+
+  <!-- 3. review -->
+  <section class="screen" id="s-review">
+    <h1 id="rev-title">Found 0 clips</h1>
+    <p class="sub" id="rev-sub"></p>
+    <div class="card" id="rev-games"></div>
+    <label class="lbl">Save clips to</label>
+    <div class="row">
+      <input type="text" id="dest" spellcheck="false">
+      <button class="btn" id="btn-browse">Browse</button>
+    </div>
+    <label class="check"><input type="checkbox" id="per-game"> Put each game in its own subfolder <span class="pill">Medal won't import these</span></label>
+    <p class="warn" id="dest-warn"></p>
+    <div class="actions">
+      <button class="btn primary" id="btn-download">Download</button>
+      <button class="btn ghost" id="btn-signout">Sign out</button>
+    </div>
+  </section>
+
+  <!-- 4. downloading -->
+  <section class="screen" id="s-download">
+    <h1>Downloading</h1>
+    <p class="sub" id="dl-dest"></p>
+    <div class="bar"><div class="fill" id="dl-fill"></div></div>
+    <p class="stat" id="dl-stat">Starting…</p>
+    <p class="hint" id="dl-sub"></p>
+    <pre class="log" id="dl-log"></pre>
+    <div class="actions">
+      <button class="btn" id="btn-pause">Pause</button>
+      <button class="btn ghost" id="btn-stop">Stop</button>
+      <span class="hint inline">Progress is saved, so closing and re-running picks up where it left off.</span>
+    </div>
+  </section>
+
+  <!-- 5. medal: guided import -->
+  <section class="screen" id="s-medal">
+    <h1 id="m-title">Import into Medal</h1>
+    <p class="sub" id="m-sub"></p>
+
+    <div class="card hidden" id="m-profile">
+      <label class="lbl">Medal account</label>
+      <div class="row">
+        <select id="m-profile-pick"></select>
+      </div>
+      <span class="note" id="m-profile-note"></span>
+    </div>
+
+    <ol class="steps" id="m-steps">
+      <li id="st-register"><span class="dot"></span><div><b>Register the folder</b><em id="st-register-x"></em></div></li>
+      <li id="st-import"><span class="dot"></span><div><b>Open Medal and let it import</b><em id="st-import-x"></em></div></li>
+      <li id="st-finish"><span class="dot"></span><div><b>Quit Medal, and I'll finish the rest</b><em id="st-finish-x"></em></div></li>
+    </ol>
+
+    <div class="bar hidden" id="m-bar"><div class="fill" id="m-fill"></div></div>
+    <p class="err" id="m-err"></p>
+    <div class="actions">
+      <button class="btn primary" id="m-action">Continue</button>
+      <button class="btn ghost" id="btn-diag">Copy diagnostics</button>
+    </div>
+  </section>
+
+  <!-- 6. done -->
+  <section class="screen" id="s-done">
+    <h1>Done</h1>
+    <p class="sub" id="done-sub"></p>
+    <div class="card" id="done-card"></div>
+    <div class="actions">
+      <button class="btn primary" id="btn-open">Open folder</button>
+      <button class="btn ghost" id="btn-close">Close</button>
+    </div>
+  </section>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>

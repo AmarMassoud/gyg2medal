@@ -1,0 +1,88 @@
+{
+  "name": "gyg2medal",
+  "version": "3.0.0",
+  "description": "Move your Gif Your Game clip library into Medal, with the right dates, games and tags",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/run.js && node test/medal_ops.js",
+    "build": "electron-builder --win --x64 --publish never",
+    "build:cross": "npm run native:win && electron-builder --win --x64 --publish never -c.npmRebuild=false; npm run native:local",
+    "native:win": "cd node_modules/better-sqlite3 && prebuild-install --runtime=electron --target=31.7.7 --arch=x64 --platform=win32",
+    "native:local": "cd node_modules/better-sqlite3 && prebuild-install --runtime=node --arch=x64",
+    "dev": "electron . --dev",
+    "setup": "npm install --ignore-scripts && node node_modules/electron/install.js && npm run native:electron",
+    "native:electron": "cd node_modules/better-sqlite3 && npx prebuild-install --runtime=electron --target=31.7.7 --arch=x64",
+    "shots": "electron test/screens.js"
+  },
+  "author": "AmarMassoud",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0"
+  },
+  "build": {
+    "appId": "tv.medal.gyg2medal",
+    "productName": "GYG2Medal",
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "build/icon.ico",
+      "!test/**",
+      "!docs/**",
+      "!**/*.md"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GYG2Medal",
+      "artifactName": "GYG2Medal-Setup-${version}.${ext}"
+    },
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "portable": {
+      "artifactName": "GYG2Medal-${version}-portable.${ext}"
+    }
+  },
+  "homepage": "https://github.com/AmarMassoud/gyg2medal",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AmarMassoud/gyg2medal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AmarMassoud/gyg2medal/issues"
+  },
+  "keywords": [
+    "gifyourgame",
+    "gyg",
+    "medal",
+    "medal.tv",
+    "clips",
+    "migration",
+    "electron"
+  ]
+}
