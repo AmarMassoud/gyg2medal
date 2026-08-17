@@ -32,6 +32,9 @@ Medal with the right dates, the right games and your tags intact.
 - **Correct games.** Clips are filed under the game they were recorded in
   instead of everything landing in "Imported".
 - **Tags carried across.** Your GYG tags become Medal hashtags.
+- **Changes that last.** Games and tags are saved to your Medal account as well
+  as locally, so they survive Medal's own sync instead of reverting to
+  "Imported" a few hours later.
 - **Read-only on GYG.** Nothing on your account is modified or deleted.
 
 Sign-in runs on GYG's own login page, so email, Discord, Google and Steam all
@@ -93,6 +96,33 @@ hashtags:
 A 1,334 clip library produced roughly 4,760 hashtags. The year, month, week and
 day auto-tags are dropped — Medal already groups by month, and they'd add four
 redundant hashtags to every clip.
+
+## Making it stick
+
+Setting the game and tags in Medal's local database is not enough on its own,
+and this took a while to work out.
+
+Medal uploads every imported clip to its own servers as a private draft. Each
+clip gets a `remote_content_id` and a copy of its metadata in Medal's cloud, and
+from that point the server is the authority. When a clip is shown in your
+library and its last sync is more than four hours old, the desktop app refetches
+it and writes the server's version back over the local row.
+
+So a local-only change looks perfect, survives closing Medal, and then quietly
+disappears. Come back later and every clip is sitting in "Imported" again with
+no hashtags. Capture dates are the exception, and only by luck: Medal never
+sends `created_at` to the server, so there is nothing up there to overwrite them
+with.
+
+GYG2Medal therefore finishes by making the same change Medal's own interface
+makes, posting the game and tags to `/content/<contentId>` for each clip using
+the credentials Medal already stored for the account you are signed into. A
+1,334 clip library takes about twenty seconds. After that the local copy and the
+server agree, and a sync confirms your clips instead of undoing them.
+
+If Medal is signed out, or signed into a different account than the library you
+picked, the app says so and stops rather than sending one account's clips with
+another account's key.
 
 ## Medal behaviour worth knowing
 

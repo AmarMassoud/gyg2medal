@@ -1,6 +1,6 @@
 {
   "name": "gyg2medal",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Move your Gif Your Game clip library into Medal, with the right dates, games and tags",
   "main": "electron/main.js",
   "scripts": {
