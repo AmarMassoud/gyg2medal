@@ -1,3 +1,4 @@
+(async () => {
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
@@ -127,5 +128,49 @@ ok('rejects truncated', (() => { try { decode(Buffer.from('c840736872', 'hex'));
   ok('all databases are listed', ranked.length === 3);
 }
 
+
+/* ---- cloud sync: never push one account's clips with another's key ---- */
+{
+  const fsx = require('fs'), osx = require('os'), pathx = require('path');
+  const Database = require('better-sqlite3');
+  const dir = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'medalcloud-'));
+  fsx.mkdirSync(pathx.join(dir, 'Medal', 'store'), { recursive: true });
+  const medalDir = pathx.join(dir, 'Medal');
+
+  const mk = (name) => {
+    const db = new Database(pathx.join(medalDir, name));
+    db.exec('create table contents(created_at INTEGER, category_id TEXT, video_path TEXT, metadata BLOB, remote_content_id TEXT, local_content_id TEXT)');
+    db.exec('create table key_values(key TEXT PRIMARY KEY, value BLOB)');
+    db.prepare('insert into contents values (?,?,?,jsonb(?),?,?)')
+      .run(1622532985, 'bvOYu0GmuA', 'C:\\GYG-Clips\\a_Slug1.mp4', '{"tags":[]}', 'remote1', 'local1');
+    db.close();
+  };
+  mk('medal-111.db');
+  fsx.writeFileSync(pathx.join(medalDir, 'store', 'user.json'),
+    JSON.stringify({ userId: '999', key: 'not-a-real-key', displayName: 'Someone' }));
+
+  const oldDir = process.env.GYG2MEDAL_MEDAL_DIR;
+  process.env.GYG2MEDAL_MEDAL_DIR = medalDir;
+  delete require.cache[require.resolve('../electron/medal')];
+  const m2 = require('../electron/medal');
+  m2.setPreferredDb(pathx.join(medalDir, 'medal-111.db'));
+
+  console.log('\n== Medal cloud sync guards ==');
+  const clips = [{ slug: 'Slug1', game: 'Rocket League', tags: [{ slug: 'goal', category: 'autotag.type' }] }];
+
+  const mismatch = await m2.syncToMedalCloud('GYG-Clips', clips);
+  ok('refuses to push when signed in as a different account',
+     mismatch.pushed === 0 && /signed in as 999/.test(mismatch.reason || ''));
+
+  fsx.writeFileSync(pathx.join(medalDir, 'store', 'user.json'), JSON.stringify({ guest: true }));
+  const guest = await m2.syncToMedalCloud('GYG-Clips', clips);
+  ok('does nothing when Medal is not signed in',
+     guest.pushed === 0 && /not signed in/.test(guest.reason || ''));
+
+  if (oldDir) process.env.GYG2MEDAL_MEDAL_DIR = oldDir; else delete process.env.GYG2MEDAL_MEDAL_DIR;
+  m2.setPreferredDb(null);
+}
+
 console.log(`\n${fail === 0 ? 'ALL PASSED' : fail + ' FAILED'}  (${pass} passed)`);
 process.exit(fail ? 1 : 0);
+})();

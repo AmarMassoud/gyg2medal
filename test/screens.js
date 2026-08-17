@@ -56,11 +56,11 @@ app.whenReady().then(async () => {
 
   await js(`$('m-err').textContent=''; setStep('import','ok','All 1,334 clips imported.');
             $('m-bar').classList.add('hidden');
-            setStep('finish','ok','1,334 dates corrected - 1,307 Rocket League, 7 Lunar Client, 1 Minecraft (19 stayed Imported) - 4,760 hashtags');`);
+            setStep('finish','ok','1,334 dates corrected \u00b7 1,307 Rocket League, 7 Lunar Client, 1 Minecraft (19 stayed Imported) \u00b7 4,760 hashtags \u00b7 1,334 saved to your Medal account');`);
   await shot(win, '8-medal-dates');
 
   await js(`state.imported=1334; state.dateResult={updated:1334,backup:'medal-1234567.gyg2medal-datefix-20260809.db'};
-            state.gameResult={moved:1315}; state.tagResult={totalTags:4760};
+            state.gameResult={moved:1315}; state.tagResult={totalTags:4760}; state.cloudResult={pushed:1334,failed:0,reason:null};
             state.result.failureLog='x'; finish();`);
   await shot(win, '9-done');
 
