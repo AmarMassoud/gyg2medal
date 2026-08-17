@@ -384,6 +384,23 @@ ipcMain.handle('medal:setTags', async (_e, { dest, dryRun }) => {
   }
 });
 
+/**
+ * The step that makes it permanent. Medal treats its own servers as the truth
+ * for a clip's game and tags, so a local-only change is undone the next time
+ * it syncs. This sends the same update its own UI sends.
+ */
+ipcMain.handle('medal:cloudSync', async (_e, { dest, dryRun }) => {
+  try {
+    const res = await medal.syncToMedalCloud(dest, clips, {
+      dryRun: !!dryRun,
+      onProgress: (p) => send('cloud:progress', p),
+    });
+    return { ok: true, ...res, backup: res.backup ? path.basename(res.backup) : null };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
 ipcMain.handle('openPath', async (_e, p) => { await shell.openPath(p); });
 ipcMain.handle('openExternal', async (_e, url) => { await shell.openExternal(url); });
 

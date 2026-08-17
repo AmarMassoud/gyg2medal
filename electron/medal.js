@@ -90,6 +90,10 @@ function assertJsonb(db) {
 }
 
 function appDataDir() {
+  // Lets the tests (and anyone poking at a copied profile) point the whole
+  // module at a throwaway directory instead of a real install.
+  const override = process.env.GYG2MEDAL_MEDAL_DIR;
+  if (override) return fs.existsSync(override) ? override : null;
   if (process.platform !== 'win32') {
     const p = path.join(os.homedir(), '.config', 'Medal');
     return fs.existsSync(p) ? p : null;
@@ -594,6 +598,154 @@ async function setClipTags(folder, clips, { dryRun = false, pathExists = fs.exis
  * staging subfolder is invisible to Medal anyway (it only scans the top level).
  * ------------------------------------------------------------------------- */
 
+/* ------------------- 6. make it survive a restart ------------------- *
+ * Everything above writes to Medal's local database, and on its own that is
+ * not enough.
+ *
+ * Medal uploads every imported clip to its own servers as a private draft
+ * (each row gets a `remote_content_id` and `metadata.remoteContent`), and from
+ * then on the server is the authority. On a schedule the client walks the
+ * library, refetches each clip and writes the server's values back over the
+ * local row, stamping `metadata.remoteSyncedAt`. Anything set only locally is
+ * quietly undone, which is why the games and tags came back as "Imported" with
+ * no hashtags after a restart. Capture dates survive because Medal never sends
+ * `created_at` to the server, so nothing overwrites them.
+ *
+ * The fix is to make the same change Medal's own UI makes: POST the clip to
+ * `/content/<contentId>` with the new categoryId and tags, exactly as the
+ * desktop client does (its own key map is
+ * `{category_id: "categoryId", ...}`). Then zero `remoteSyncedAt` so the next
+ * sync pulls the corrected values down instead of the stale ones.
+ *
+ * Auth is the `userId` and `key` Medal already stored in store/user.json for
+ * the signed-in account. Nothing new is asked of the user, and the request is
+ * byte for byte what Medal sends. Clips that have not been uploaded yet are
+ * left alone: for those the local row IS the source, and Medal builds the
+ * server record from it when the upload happens.
+ * ------------------------------------------------------------------- */
+
+const API = 'https://api-v2.medal.tv';
+const CLOUD_CONCURRENCY = 8;
+
+/** The signed-in account's API credentials, or null. Never logged. */
+function cloudAuth(dir) {
+  try {
+    const u = JSON.parse(fs.readFileSync(path.join(dir, 'store', 'user.json'), 'utf8'));
+    if (!u || !u.userId || !u.key || u.guest) return null;
+    return { userId: String(u.userId), key: String(u.key) };
+  } catch {
+    return null;
+  }
+}
+
+async function postContent(contentId, body, auth) {
+  const res = await fetch(`${API}/content/${contentId}`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      'x-authentication': `${auth.userId},${auth.key}`,
+    },
+    body: JSON.stringify(body),
+  });
+  return res.status;
+}
+
+/**
+ * Push the game and tags for every already-uploaded clip to Medal's servers,
+ * then mark those rows stale so the client pulls the new values down.
+ */
+async function syncToMedalCloud(folder, clips, { onProgress = () => {}, dryRun = false } = {}) {
+  const result = {
+    eligible: 0, pushed: 0, failed: 0, notUploaded: 0, skipped: 0,
+    reason: null, backup: null,
+  };
+
+  const dir = appDataDir();
+  if (!dir) { result.reason = 'Medal is not installed here.'; return result; }
+
+  const auth = cloudAuth(dir);
+  if (!auth) {
+    result.reason = 'Medal is not signed in, so there is nothing to sync. '
+      + 'The local changes still apply.';
+    return result;
+  }
+
+  const state = detect();
+  if (!state.dbPath) { result.reason = state.reason || "Medal's database was not found."; return result; }
+
+  // Never send one account's changes with another account's key.
+  if (userIdOf(state.dbPath) !== auth.userId) {
+    result.reason = `The chosen library belongs to account ${userIdOf(state.dbPath)} `
+      + `but Medal is signed in as ${auth.userId}. Sign into that account in Medal `
+      + 'and run this again to make the change permanent.';
+    return result;
+  }
+
+  // Work out what each uploaded clip should look like.
+  const jobs = [];
+  {
+    const handle = openRead(state.dbPath);
+    try {
+      const catalog = gameCatalog(handle.db);
+      const bySlug = new Map(clips.map((c) => [c.slug, c]));
+      const rows = handle.db.prepare(
+        'select rowid, category_id, video_path, remote_content_id from contents where video_path like ?')
+        .all(`%${path.basename(folder)}%`);
+      for (const row of rows) {
+        const clip = bySlug.get(slugOf(row.video_path));
+        if (!clip) continue;
+        if (!row.remote_content_id) { result.notUploaded++; continue; }
+        const body = {};
+        const category = categoryFor(clip.game, catalog);
+        if (category) body.categoryId = category;
+        const tags = tagsForClip(clip);
+        if (tags.length) body.tags = tags;
+        if (!Object.keys(body).length) { result.skipped++; continue; }
+        jobs.push({ rowid: row.rowid, contentId: row.remote_content_id, body });
+      }
+    } finally {
+      closeHandle(handle);
+    }
+  }
+
+  result.eligible = jobs.length;
+  if (dryRun || !jobs.length) return result;
+
+  // Push, with a retry for the transient 5xx and rate limits.
+  const done = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < jobs.length) {
+      const job = jobs[next++];
+      let ok = false;
+      for (let attempt = 0; attempt < 4 && !ok; attempt++) {
+        let status = 0;
+        try { status = await postContent(job.contentId, job.body, auth); } catch { status = 0; }
+        if (status === 200) { ok = true; break; }
+        if (status && status !== 429 && status < 500) break;   // a real rejection
+        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+      }
+      if (ok) { result.pushed++; done.push(job.rowid); } else { result.failed++; }
+      onProgress({ done: result.pushed + result.failed, total: jobs.length });
+    }
+  };
+  await Promise.all(Array.from({ length: CLOUD_CONCURRENCY }, worker));
+
+  // Only invalidate rows the server actually accepted. Zeroing a row we failed
+  // to push would invite Medal to pull the old values straight back.
+  if (done.length) {
+    const { backup: b } = await withDb('cloudsync', false, (db, apply) => {
+      if (!apply) return;
+      const stmt = db.prepare(
+        "update contents set metadata = jsonb_set(metadata, '$.remoteSyncedAt', 0) where rowid = ?");
+      db.transaction(() => { for (const id of done) stmt.run(id); })();
+    });
+    result.backup = b;
+  }
+  return result;
+}
+
 const STAGING = '.gyg2medal-restage';
 
 /** Files in `folder` that Medal has NOT imported yet. */
@@ -670,7 +822,7 @@ async function restageForImport(folder, { onProgress = () => {}, batch = 40, pau
 
 module.exports = {
   detect, isRunning, listProfiles, restageForImport, pendingFiles, activeProfile, setPreferredDb, getPreferredDb, parseTasklist, hasFolder, addRecorderFolder, importedCount,
-  fixClipDates, setGameCategories, setClipTags,
+  fixClipDates, setGameCategories, setClipTags, syncToMedalCloud, cloudAuth,
   gameCatalog, categoryFor, normaliseGame, tagsForClip,
   EXTERNAL_KEY, CATALOG_KEY, SKIP_TAG_CATEGORIES,
 };

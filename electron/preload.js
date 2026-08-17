@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('api', {
   medalFixDates:    (o)           => call('medal:fixDates', o),
   medalSetGames:    (o)           => call('medal:setGames', o),
   medalSetTags:     (o)           => call('medal:setTags', o),
+  medalCloudSync:   (o)           => call('medal:cloudSync', o),
+  onCloudProgress:  (fn)          => ipcRenderer.on('cloud:progress', (_e, p) => fn(p)),
   diagnostics:      (d)           => call('diagnostics', d),
   openPath:         (p)           => call('openPath', p),
   openExternal:     (u)           => call('openExternal', u),
