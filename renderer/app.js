@@ -443,12 +443,23 @@ async function runFixUps() {
   if (!tags.ok) return fail(tags.error);
   state.tagResult = tags;
 
+  // Without this the games and tags come back as "Imported" with no hashtags
+  // the next time Medal syncs, because its servers hold the real copy.
+  setStep('finish', 'on', 'Making it permanent…');
+  $('m-bar').classList.remove('hidden');
+  const cloud = await window.api.medalCloudSync({ dest: state.dest });
+  $('m-bar').classList.add('hidden');
+  if (!cloud.ok) return fail(cloud.error);
+  state.cloudResult = cloud;
+
   const named = Object.entries(games.byGame).sort((a, b) => b[1] - a[1])
     .map(([g, n]) => `${n.toLocaleString()} ${g}`).join(', ');
   setStep('finish', 'ok',
     `${dates.updated.toLocaleString()} dates corrected · ${named || 'nothing to re-file'}`
     + `${games.keptImported ? ` (${games.keptImported} stayed Imported)` : ''}`
-    + ` · ${tags.totalTags.toLocaleString()} hashtags`);
+    + ` · ${tags.totalTags.toLocaleString()} hashtags`
+    + (cloud.pushed ? ` · ${cloud.pushed.toLocaleString()} saved to your Medal account`
+                    : cloud.reason ? ` · ${cloud.reason}` : ''));
   finish();
 }
 
@@ -469,7 +480,14 @@ function finish() {
   }
   if (state.gameResult) lines.push(['Filed under their game', state.gameResult.moved.toLocaleString()]);
   if (state.tagResult) lines.push(['Hashtags written', state.tagResult.totalTags.toLocaleString()]);
+  const c = state.cloudResult;
+  if (c && c.pushed) lines.push(['Saved to your Medal account', c.pushed.toLocaleString()]);
   let html = lines.map(([k, v]) => `<div class="line"><span>${k}</span><span>${v}</span></div>`).join('');
+  if (c && c.reason) {
+    html += `<span class="note">${c.reason} Without it, Medal puts the games and tags back the way they were the next time it syncs.</span>`;
+  } else if (c && c.failed) {
+    html += `<span class="note">${c.failed.toLocaleString()} clips could not be saved to your Medal account, so those may revert. Run the app again to retry them.</span>`;
+  }
   if (d && d.backup) {
     html += `<span class="note">Medal's settings were backed up first as ${d.backup}. To undo, close Medal and swap that file back over the original.</span>`;
   }
